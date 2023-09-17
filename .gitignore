@@ -1,0 +1,15 @@
+/.clion-cmake/
+/.cmake/
+/.idea/
+/.vs/
+/bin/
+/bin-int/
+/CMakeFiles/
+/Testing/
+CMakeLists.txt
+*.cmake
+*.vcxproj*
+*.sln
+
+*.dll
+!vendor/**/*.dll
