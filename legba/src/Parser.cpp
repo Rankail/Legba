@@ -27,15 +27,15 @@ bool Parser::parse(const std::vector<Token> &tokens) {
 
 // Error
 
-void Parser::errorAtCurrent(const std::string &msg) {
-    errorAt(&tokens[current], msg);
+void Parser::errorAtCurrent(const std::string &msg, bool noThrow) {
+    errorAt(&tokens[current], msg, noThrow);
 }
 
-void Parser::error(const std::string &msg) {
-    errorAt(&tokens[current-1], msg);
+void Parser::error(const std::string &msg, bool noThrow) {
+    errorAt(&tokens[current-1], msg, noThrow);
 }
 
-void Parser::errorAt(Token *token, const std::string &msg) {
+void Parser::errorAt(Token *token, const std::string &msg, bool noThrow) {
     auto e = std::format("[{}:{}] Error", token->line, token->index);
 
     if (token->type == TokenType::END_OF_FILE) {
@@ -50,7 +50,9 @@ void Parser::errorAt(Token *token, const std::string &msg) {
     fprintf(stderr, e.c_str());
     hadError = true;
 
-    throw ParserError(e.c_str());
+    if (!noThrow) {
+        throw ParserError(e.c_str());
+    }
 }
 
 void Parser::synchronize() {
@@ -58,7 +60,7 @@ void Parser::synchronize() {
         if (previous().type == TokenType::SEMICOLON) return;
         switch (peek().type) {
             case TokenType::CLASS:
-            case TokenType::FUNC:
+            case TokenType::FUNCTION:
             case TokenType::VAR:
             case TokenType::FOR:
             case TokenType::IF:
@@ -240,7 +242,7 @@ Node* Parser::primary() {
     }
 
     if (match(TokenType::IDENTIFIER)) {
-        return new VariableNode(previous().lexeme);
+        return call();
     }
 
     if (match(TokenType::LEFT_PAREN)) {
@@ -249,7 +251,31 @@ Node* Parser::primary() {
         return node;
     }
 
-    error("Malformed expression");
+    advance();
+    errorAt(&tokens[current - 1], "Malformed expression");
+
+}
+
+Node* Parser::call() {
+    auto name = previous().lexeme;
+
+    if (!match(TokenType::LEFT_PAREN)) {
+        return new VariableNode(name);
+    }
+
+    auto args = std::vector<Node*>();
+    if (!check(TokenType::RIGHT_PAREN)) {
+        do {
+            if (args.size() >= 255) {
+                errorAtCurrent("No more than 255 arguments are allowed.", true);
+            }
+            args.emplace_back(expression());
+        } while (match(TokenType::COMMA));
+    }
+
+    consume(TokenType::RIGHT_PAREN, "Expected ')' after arguments.");
+
+    return new CallNode(name, args);
 }
 
 // Statements
@@ -257,15 +283,8 @@ Node* Parser::primary() {
 Node* Parser::declaration() {
     switch (peek().type) {
         case TokenType::VAR: return varDeclaration();
+        case TokenType::FUNCTION: return funcDeclaration("function");
         default: return statement();
-    }
-}
-
-Node* Parser::statement() {
-    switch (peek().type) {
-        case TokenType::LEFT_BRACE: return block();
-        case TokenType::IF: return ifStatement();
-        default: return expressionStatement();
     }
 }
 
@@ -284,6 +303,44 @@ Node* Parser::varDeclaration() {
         return new BinaryNode(new OpNode(TokenType::VAR), new VariableNode(name.lexeme), initializer);
     } else {
         return new UnaryNode(new OpNode(TokenType::VAR), new VariableNode(name.lexeme));
+    }
+}
+
+Node* Parser::funcDeclaration(std::string kind) {
+    advance(); // FN
+
+    auto name = consume(TokenType::IDENTIFIER, "Expected " + kind + " name.").lexeme;
+
+    consume(TokenType::LEFT_PAREN, "Expected '(' after " + kind + " name.");
+    auto params = std::vector<std::string>();
+    if (!check(TokenType::RIGHT_PAREN)) {
+        do {
+            if (params.size() >= 255) {
+                errorAtCurrent("No more than 255 parameters are allowed.", true);
+            }
+
+            params.emplace_back(consume(TokenType::IDENTIFIER, "Expected parameter name").lexeme);
+        } while (match(TokenType::COMMA));
+    }
+
+    consume(TokenType::RIGHT_PAREN, "Expected ')' after parameters.");
+
+    if (!check(TokenType::LEFT_BRACE)) {
+        error("Expected '{' before " + kind + " body.");
+    }
+    Node* body = block();
+
+    return new FunctionNode(name, params, body);
+}
+
+Node* Parser::statement() {
+    switch (peek().type) {
+        case TokenType::LEFT_BRACE: return block();
+        case TokenType::IF: return ifStatement();
+        case TokenType::WHILE: return whileStatement();
+        case TokenType::FOR: return forStatement();
+        case TokenType::RETURN: return returnStatement();
+        default: return expressionStatement();
     }
 }
 
@@ -319,6 +376,60 @@ Node* Parser::ifStatement() {
     }
 
     return new IfNode(condition, thenBranch, elseBranch);
+}
+
+Node* Parser::whileStatement() {
+    advance(); // WHILE
+
+    consume(TokenType::LEFT_PAREN, "Expected '(' after 'while'.");
+    Node* condition = expression();
+    consume(TokenType::RIGHT_PAREN, "Expected ')' after while condition.");
+
+    Node* body = statement();
+
+    return new WhileNode(condition, body);
+}
+
+Node* Parser::forStatement() {
+    advance(); // FOR
+
+    consume(TokenType::LEFT_PAREN, "Expected '(' after 'for'.");
+    Node* initializer;
+    if (match(TokenType::SEMICOLON)) {
+        initializer = nullptr;
+    } else if (check(TokenType::VAR)) {
+        initializer = varDeclaration();
+    } else {
+        initializer = expressionStatement();
+    }
+
+    Node* condition = nullptr;
+    if (!check(TokenType::SEMICOLON)) {
+        condition = expression();
+    }
+    consume(TokenType::SEMICOLON, "Expected ';' after for loop condition");
+
+    Node* increment = nullptr;
+    if (!check(TokenType::RIGHT_PAREN)) {
+        increment = expression();
+    }
+    consume(TokenType::RIGHT_PAREN, "Expected ')' aft for clause.");
+
+    Node* body = statement();
+
+    return new ForNode(initializer, condition, increment, body);
+}
+
+Node* Parser::returnStatement() {
+    advance(); // RETURN
+
+    Node* value = nullptr;
+    if (!check(TokenType::SEMICOLON)) {
+        value = expression();
+    }
+
+    consume(TokenType::SEMICOLON, "Expected ';' after return value.");
+    return new UnaryNode(new OpNode(TokenType::RETURN), value);
 }
 
 Node* Parser::expressionStatement() {

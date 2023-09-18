@@ -8,7 +8,7 @@
 #include "Token.h"
 
 enum class NodeType {
-    NUMBER, STRING, BOOL, VARIABLE, OP, UNARY, BINARY, CALL, FUNCTION, SCOPE, IF
+    NUMBER, STRING, BOOL, VARIABLE, OP, UNARY, BINARY, SCOPE, IF, WHILE, FOR, CALL, FUNCTION, CLASS
 };
 
 class Node {
@@ -116,38 +116,6 @@ private:
     Node* right;
 };
 
-class CallNode : public Node {
-public:
-    CallNode(const std::string& callee, std::vector<Node*> args)
-        : Node(NodeType::CALL), callee(callee), args(std::move(args)) {}
-
-    std::string getCallee() const { return callee; }
-    std::vector<Node*> getArgs() const { return args; }
-
-    virtual std::string toString() override;
-
-private:
-    std::string callee;
-    std::vector<Node*> args;
-};
-
-class FunctionNode : public Node {
-public:
-    FunctionNode(const std::string& name, std::vector<std::string> args, Node* body)
-        : Node(NodeType::FUNCTION), name(name), args(std::move(args)), body(std::move(body)) {}
-
-    std::string getName() const { return name; }
-    std::vector<std::string> getArgs() const { return args; }
-    Node* getBody() const { return body; }
-
-    virtual std::string toString() override;
-
-private:
-    std::string name;
-    std::vector<std::string> args;
-    Node* body;
-};
-
 class ScopeNode : public Node {
 public:
     ScopeNode(ScopeNode* enclosing = nullptr)
@@ -183,6 +151,85 @@ private:
     Node* elseBranch;
 };
 
+class WhileNode : public Node {
+public:
+    WhileNode(Node* condition, Node* body)
+        : Node(NodeType::WHILE), condition(condition), body(body) {
+    }
+
+    Node* getCondition() const { return condition; }
+    Node* getBody() const { return body; }
+
+    virtual std::string toString() override;
+
+private:
+    Node* condition;
+    Node* body;
+};
+
+class ForNode : public Node {
+public:
+    ForNode(Node* initializer, Node* condition, Node* increment, Node* body)
+        : Node(NodeType::FOR), initializer(initializer), condition(condition), increment(increment), body(body) {
+    }
+
+    Node* getInitializer() const { return initializer; }
+    Node* getCondition() const { return condition; }
+    Node* getIncrement() const { return increment; }
+    Node* getBody() const { return body; }
+
+    virtual std::string toString() override;
+
+private:
+    Node* initializer;
+    Node* condition;
+    Node* increment;
+    Node* body;
+};
+
+class CallNode : public Node {
+public:
+    CallNode(const std::string& callee, std::vector<Node*> args)
+        : Node(NodeType::CALL), callee(callee), args(std::move(args)) {
+    }
+
+    std::string getCallee() const { return callee; }
+    std::vector<Node*> getArgs() const { return args; }
+
+    virtual std::string toString() override;
+
+private:
+    std::string callee;
+    std::vector<Node*> args;
+};
+
+class FunctionNode : public Node {
+public:
+    FunctionNode(const std::string& name, std::vector<std::string> params, Node* body)
+        : Node(NodeType::FUNCTION), name(name), params(std::move(params)), body(std::move(body)) {
+    }
+
+    std::string getName() const { return name; }
+    std::vector<std::string> getParams() const { return params; }
+    Node* getBody() const { return body; }
+
+    virtual std::string toString() override;
+
+private:
+    std::string name;
+    std::vector<std::string> params;
+    Node* body;
+};
+
+class ClassNode : public Node {
+public:
+    ClassNode(std::string name)
+        : Node(NodeType::CLASS), name(name) { }
+
+private:
+    std::string name;
+};
+
 std::ostream& operator <<(std::ostream& os, NumberNode* const& node);
 std::ostream& operator <<(std::ostream& os, StringNode* const& node);
 std::ostream& operator <<(std::ostream& os, BoolNode* const& node);
@@ -194,6 +241,8 @@ std::ostream& operator <<(std::ostream& os, CallNode* const& node);
 std::ostream& operator <<(std::ostream& os, FunctionNode* const& node);
 std::ostream& operator <<(std::ostream& os, ScopeNode* const& node);
 std::ostream& operator <<(std::ostream& os, IfNode* const& node);
+std::ostream& operator <<(std::ostream& os, WhileNode* const& node);
+std::ostream& operator <<(std::ostream& os, ForNode* const& node);
 
 
 #endif //LEGBA_NODE_H

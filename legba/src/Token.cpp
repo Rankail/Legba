@@ -37,7 +37,7 @@ std::string tokenTypeToString(TokenType type) {
         case TokenType::CLASS: return "CLASS";
         case TokenType::IF: return "IF";
         case TokenType::ELSE: return "ELSE";
-        case TokenType::FUNC: return "FUNC";
+        case TokenType::FUNCTION: return "FUNCTION";
         case TokenType::FOR: return "FOR";
         case TokenType::WHILE: return "WHILE";
         case TokenType::TRUE: return "TRUE";

@@ -20,6 +20,10 @@ project "legba"
         "{COPYDIR} %[rsc] %[%{cfg.targetdir}/rsc]"
     }
 
+    debugargs {
+        "./rsc/test.leg"
+    }
+
     filter "configurations:Debug"
         symbols "On"
 

@@ -14,9 +14,9 @@ public:
     bool parse(std::vector<Token> const& tokens);
 
     // Error
-    void errorAtCurrent(const std::string& msg);
-    void error(const std::string& msg);
-    void errorAt(Token* token, const std::string& msg);
+    void errorAtCurrent(const std::string& msg, bool noThrow = false);
+    void error(const std::string& msg, bool noThrow = false);
+    void errorAt(Token* token, const std::string& msg, bool noThrow = false);
     void synchronize();
 
     // Utility
@@ -40,15 +40,21 @@ public:
     Node* factor();
     Node* unary();
     Node* primary();
+    Node* call();
 
     // Statement
     Node* declaration();
 
+    Node* varDeclaration();
+    Node* funcDeclaration(std::string kind);
+
     Node* statement();
 
-    Node* varDeclaration();
     Node* block();
     Node* ifStatement();
+    Node* whileStatement();
+    Node* forStatement();
+    Node* returnStatement();
     Node* expressionStatement();
 
 

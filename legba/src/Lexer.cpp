@@ -99,9 +99,20 @@ void Lexer::skipWhitespace() {
             case '/':
                 if (peekNext() == '/') {
                     while (peek() != '\n' && !isAtEnd()) advance();
+                } else if (peekNext() == '*') {
+                    while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
+                        if (peek() == '\n') {
+                            line++;
+                            indexOffset = current;
+                        }
+                        advance();
+                    }
+                    advance();
+                    advance();
                 } else {
                     return;
                 }
+                break;
             default:
                 return;
         }
@@ -149,7 +160,7 @@ TokenType Lexer::identifierType() {
                 switch (source[start+1]) {
                     case 'a': return checkKeyword(2, 3, "lse", TokenType::FALSE);
                     case 'o': return checkKeyword(2, 1, "r", TokenType::FOR);
-                    case 'u': return checkKeyword(2, 2, "nc", TokenType::FUNC);
+                    case 'n': return TokenType::FUNCTION;
                 }
             }
             break;
