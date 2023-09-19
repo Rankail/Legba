@@ -47,6 +47,7 @@ public:
 
     Node* varDeclaration();
     Node* funcDeclaration(std::string kind);
+    Node* classDeclaration();
 
     Node* statement();
 

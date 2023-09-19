@@ -153,7 +153,14 @@ Token Lexer::identifier() {
 
 TokenType Lexer::identifierType() {
     switch(source[start]) {
-        case 'c': return checkKeyword(1, 4, "lass", TokenType::CLASS);
+        case 'c':
+            if (current - start > 1) {
+                switch (source[start + 1]) {
+                case 'l': return checkKeyword(2, 3, "ass", TokenType::CLASS);
+                case 'o': return checkKeyword(2, 3, "nst", TokenType::CONST);
+                }
+            }
+            break;
         case 'e': return checkKeyword(1, 3, "lse", TokenType::ELSE);
         case 'f':
             if (current - start > 1) {
@@ -165,8 +172,22 @@ TokenType Lexer::identifierType() {
             }
             break;
         case 'i': return checkKeyword(1, 1, "f", TokenType::IF);
+        case 'p':
+            if (current - start > 1) {
+                switch (source[start + 1]) {
+                    case 'r': return checkKeyword(2, 7, "otected", TokenType::PUBLIC);
+                    case 'u': return checkKeyword(2, 4, "blic", TokenType::PUBLIC);
+                }
+            }
+            break;
         case 'r': return checkKeyword(1, 5, "eturn", TokenType::RETURN);
-        case 's': return checkKeyword(1, 4, "uper", TokenType::SUPER);
+        case 's': 
+            if (current - start > 1) {
+                switch (source[start + 1]) {
+                    case 't': return checkKeyword(1, 4, "atic", TokenType::STATIC);
+                    case 'u': return checkKeyword(1, 3, "per", TokenType::SUPER);
+                }
+            }
         case 't':
             if (current - start > 1) {
                 switch (source[start+1]) {
@@ -175,7 +196,14 @@ TokenType Lexer::identifierType() {
                 }
             }
             break;
-        case 'v': return checkKeyword(1, 2, "ar", TokenType::VAR);
+        case 'v':
+            if (current - start > 1) {
+                switch (source[start + 1]) {
+                case 'a': return checkKeyword(2, 1, "r", TokenType::VAR);
+                case 'i': return checkKeyword(2, 5, "rtual", TokenType::VIRTUAL);
+                }
+            }
+            break;
         case 'w': return checkKeyword(1, 4, "hile", TokenType::WHILE);
     }
     return TokenType::IDENTIFIER;

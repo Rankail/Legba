@@ -5,10 +5,11 @@
 #include <vector>
 #include <memory>
 
+#include "misc/Utils.h"
 #include "Token.h"
 
 enum class NodeType {
-    NUMBER, STRING, BOOL, VARIABLE, OP, UNARY, BINARY, SCOPE, IF, WHILE, FOR, CALL, FUNCTION, CLASS
+    NUMBER, STRING, BOOL, VARIABLE, VARIABLE_DECL, OP, UNARY, BINARY, SCOPE, IF, WHILE, FOR, CALL, FUNCTION, CLASS
 };
 
 class Node {
@@ -69,6 +70,23 @@ public:
 
 private:
     std::string name;
+};
+
+class VariableDeclarationNode : public Node {
+public:
+    VariableDeclarationNode(const std::string& name, uint16_t flags, Node* initilaizer) :
+        Node(NodeType::VARIABLE_DECL), name(name), flags(flags), initializer(initializer) {}
+
+    std::string getName() const { return name; }
+    uint16_t getFlags() const { return flags; }
+    Node* getInitializer() const { return initializer; }
+
+    virtual std::string toString() override;
+
+private:
+    std::string name;
+    uint16_t flags;
+    Node* initializer;
 };
 
 class OpNode : public Node {
@@ -203,13 +221,29 @@ private:
     std::vector<Node*> args;
 };
 
+enum SymbolFlag : uint16_t {
+    SF_NONE =       0,
+    SF_NOT_VAR =    BIT(0),
+    SF_NOT_FN =     BIT(1),
+    SF_IS_CLASS =   BIT(2),
+    SF_CONST =      BIT(7) | BIT(1),
+    SF_PUBLIC =     BIT(8) | BIT(2),
+    SF_PROTECTED =  BIT(9) | BIT(2),
+    SF_STATIC =     BIT(10) | BIT(2),
+    SF_VIRTUAL =    BIT(11) | BIT(0) | BIT(2)
+};
+
+SymbolFlag tokenToSymbolFlag(TokenType token);
+std::string symbolFlagsToString(uint16_t flags);
+
 class FunctionNode : public Node {
 public:
-    FunctionNode(const std::string& name, std::vector<std::string> params, Node* body)
-        : Node(NodeType::FUNCTION), name(name), params(std::move(params)), body(std::move(body)) {
+    FunctionNode(const std::string& name, uint16_t flags, std::vector<std::string> params, Node* body)
+        : Node(NodeType::FUNCTION), name(name), flags(flags), params(std::move(params)), body(std::move(body)) {
     }
 
     std::string getName() const { return name; }
+    uint16_t getFlags() const { return flags; }
     std::vector<std::string> getParams() const { return params; }
     Node* getBody() const { return body; }
 
@@ -217,6 +251,7 @@ public:
 
 private:
     std::string name;
+    uint16_t flags;
     std::vector<std::string> params;
     Node* body;
 };

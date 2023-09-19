@@ -284,6 +284,7 @@ Node* Parser::declaration() {
     switch (peek().type) {
         case TokenType::VAR: return varDeclaration();
         case TokenType::FUNCTION: return funcDeclaration("function");
+        case TokenType::CLASS: return classDeclaration();
         default: return statement();
     }
 }
@@ -331,6 +332,52 @@ Node* Parser::funcDeclaration(std::string kind) {
     Node* body = block();
 
     return new FunctionNode(name, params, body);
+}
+
+Node* Parser::classDeclaration() {
+    advance(); // CLASS
+
+    auto name = consume(TokenType::IDENTIFIER, "Expected class name.").lexeme;
+
+    consume(TokenType::LEFT_BRACE, "Expected '{' after class name.");
+
+    std::unordered_map<std::string, Node*> internals;
+
+    while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
+        uint16_t flags = 0;
+
+        while (!check(TokenType::VAR) && !check(TokenType::FUNCTION)) {
+            switch (peek().type) {
+            case TokenType::PUBLIC:
+            case TokenType::PROTECTED:
+                flags |= tokenToSymbolFlag(peek().type);
+                break;
+            default:
+                error("Unexpected symbol.");
+                break;
+            }
+        }
+
+        switch (peek().type) {
+            case TokenType::VAR:{
+                if (flags | SymbolFlag::SF_NOT_VAR) {
+                    error("Attribute has forbidden flag.");
+                }
+
+                advance(); // VAR
+
+                auto name = consume(TokenType::IDENTIFIER, "Expected attribute name.").lexeme;
+
+                consume(TokenType::SEMICOLON, "Expected ';' after attribute declaration.");
+
+
+
+                break;
+            }
+        }
+    }
+
+    return nullptr;
 }
 
 Node* Parser::statement() {

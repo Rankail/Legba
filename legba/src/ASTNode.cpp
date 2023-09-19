@@ -2,6 +2,51 @@
 
 #include <sstream>
 
+SymbolFlag tokenToSymbolFlag(TokenType token) {
+    switch (token) {
+        case TokenType::CONST: return SymbolFlag::SF_CONST;
+        case TokenType::PUBLIC: return SymbolFlag::SF_PUBLIC;
+        case TokenType::PROTECTED: return SymbolFlag::SF_PROTECTED;
+        case TokenType::STATIC: return SymbolFlag::SF_STATIC;
+        case TokenType::VIRTUAL: return SymbolFlag::SF_VIRTUAL;
+    }
+    return SymbolFlag::SF_NONE;
+}
+
+std::string symbolFlagsToString(uint16_t flags) {
+    std::string result = "";
+    if ((flags & SymbolFlag::SF_NOT_FN) != 0) {
+        result += "NOT_FN ";
+    }
+    if ((flags & SymbolFlag::SF_NOT_VAR) != 0) {
+        result += "NOT_VAR ";
+    }
+    if ((flags & SymbolFlag::SF_IS_CLASS) != 0) {
+        result += "IS_CLASS ";
+    }
+    if ((flags & SymbolFlag::SF_CONST) != 0) {
+        result += "CONST ";
+    }
+    if ((flags & SymbolFlag::SF_PROTECTED) != 0) {
+        result += "PROTECTED ";
+    }
+    if ((flags & SymbolFlag::SF_PUBLIC) != 0) {
+        result += "PUBLIC ";
+    }
+    if ((flags & SymbolFlag::SF_STATIC) != 0) {
+        result += "STATIC ";
+    }
+    if ((flags & SymbolFlag::SF_VIRTUAL) != 0) {
+        result += "VIRTUAL ";
+    }
+    
+    if (!result.empty()) {
+        result.pop_back();
+    }
+
+    return result;
+}
+
 std::ostream& operator <<(std::ostream& os, NumberNode* const& node) {
     os << "NumberNode(" << node->getValue() << ')';
     return os;
@@ -19,6 +64,16 @@ std::ostream& operator <<(std::ostream& os, BoolNode* const& node) {
 
 std::ostream& operator <<(std::ostream& os, VariableNode* const& node) {
     os << "VariableNode(" << node->getName() << ')';
+    return os;
+}
+
+std::ostream& operator <<(std::ostream& os, VariableDeclarationNode* const& node) {
+    os << "VariableDeclarationNode(\n" << node->getName() << '\n'
+        << "flags: " << symbolFlagsToString(node->getFlags()) << '\n';
+    if (node->getInitializer() != nullptr) {
+        os << "init: " << node->getInitializer()->toString() << '\n';
+    }
+    os << ')';
     return os;
 }
 
@@ -150,5 +205,9 @@ std::string WhileNode::toString() {
 }
 
 std::string ForNode::toString() {
+    return (std::stringstream() << this).str();
+}
+
+std::string VariableDeclarationNode::toString() {
     return (std::stringstream() << this).str();
 }

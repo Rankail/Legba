@@ -35,6 +35,11 @@ std::string tokenTypeToString(TokenType type) {
         case TokenType::BIN_XOR: return "BIN_XOR";
         case TokenType::BIN_NOT: return "BIN_NOT";
         case TokenType::CLASS: return "CLASS";
+        case TokenType::PUBLIC: return "PUBLIC";
+        case TokenType::PROTECTED: return "PROTECTED";
+        case TokenType::STATIC: return "STATIC";
+        case TokenType::CONST: return "CONST";
+        case TokenType::VIRTUAL: return "VIRTUAL";
         case TokenType::IF: return "IF";
         case TokenType::ELSE: return "ELSE";
         case TokenType::FUNCTION: return "FUNCTION";
