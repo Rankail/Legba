@@ -184,8 +184,8 @@ TokenType Lexer::identifierType() {
         case 's': 
             if (current - start > 1) {
                 switch (source[start + 1]) {
-                    case 't': return checkKeyword(1, 4, "atic", TokenType::STATIC);
-                    case 'u': return checkKeyword(1, 3, "per", TokenType::SUPER);
+                    case 't': return checkKeyword(2, 4, "atic", TokenType::STATIC);
+                    case 'u': return checkKeyword(2, 3, "per", TokenType::SUPER);
                 }
             }
         case 't':

@@ -7,6 +7,7 @@
 
 #include "misc/Utils.h"
 #include "Token.h"
+#include <unordered_map>
 
 enum class NodeType {
     NUMBER, STRING, BOOL, VARIABLE, VARIABLE_DECL, OP, UNARY, BINARY, SCOPE, IF, WHILE, FOR, CALL, FUNCTION, CLASS
@@ -74,7 +75,7 @@ private:
 
 class VariableDeclarationNode : public Node {
 public:
-    VariableDeclarationNode(const std::string& name, uint16_t flags, Node* initilaizer) :
+    VariableDeclarationNode(const std::string& name, uint16_t flags, Node* initializer) :
         Node(NodeType::VARIABLE_DECL), name(name), flags(flags), initializer(initializer) {}
 
     std::string getName() const { return name; }
@@ -223,9 +224,10 @@ private:
 
 enum SymbolFlag : uint16_t {
     SF_NONE =       0,
-    SF_NOT_VAR =    BIT(0),
-    SF_NOT_FN =     BIT(1),
-    SF_IS_CLASS =   BIT(2),
+    SF_MUST_FN =    BIT(0),
+    SF_MUST_VAR =   BIT(1),
+    SF_IN_CLASS =   BIT(2),
+
     SF_CONST =      BIT(7) | BIT(1),
     SF_PUBLIC =     BIT(8) | BIT(2),
     SF_PROTECTED =  BIT(9) | BIT(2),
@@ -235,6 +237,7 @@ enum SymbolFlag : uint16_t {
 
 SymbolFlag tokenToSymbolFlag(TokenType token);
 std::string symbolFlagsToString(uint16_t flags);
+std::vector<TokenType> qualifiersFromForbiddenFlags(uint16_t x, uint16_t flags);
 
 class FunctionNode : public Node {
 public:
@@ -258,11 +261,17 @@ private:
 
 class ClassNode : public Node {
 public:
-    ClassNode(std::string name)
-        : Node(NodeType::CLASS), name(name) { }
+    ClassNode(std::string name, std::unordered_map<std::string, Node*> internals)
+        : Node(NodeType::CLASS), name(name), internals(std::move(internals)) { }
+
+    std::string getName() const { return name; }
+    std::unordered_map<std::string, Node*> getInternals() const { return internals; }
+
+    virtual std::string toString() override;
 
 private:
     std::string name;
+    std::unordered_map<std::string, Node*> internals;
 };
 
 std::ostream& operator <<(std::ostream& os, NumberNode* const& node);
@@ -278,6 +287,7 @@ std::ostream& operator <<(std::ostream& os, ScopeNode* const& node);
 std::ostream& operator <<(std::ostream& os, IfNode* const& node);
 std::ostream& operator <<(std::ostream& os, WhileNode* const& node);
 std::ostream& operator <<(std::ostream& os, ForNode* const& node);
+std::ostream& operator <<(std::ostream& os, ClassNode* const& node);
 
 
 #endif //LEGBA_NODE_H

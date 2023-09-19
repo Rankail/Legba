@@ -3,6 +3,7 @@
 #include "Error.h"
 
 #include <format>
+#include <algorithm>
 
 Parser::Parser()
     : hadError(false), current(0), tokens(), rootScope(nullptr), scope(nullptr) {
@@ -253,7 +254,6 @@ Node* Parser::primary() {
 
     advance();
     errorAt(&tokens[current - 1], "Malformed expression");
-
 }
 
 Node* Parser::call() {
@@ -292,6 +292,9 @@ Node* Parser::declaration() {
 Node* Parser::varDeclaration() {
     advance(); // VAR
 
+    uint16_t flags = qualifiers();
+    checkQualifiers(flags, SymbolFlag::SF_IN_CLASS | SymbolFlag::SF_MUST_FN, "a variable");
+
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name.");
 
     Node* initializer = nullptr;
@@ -300,15 +303,15 @@ Node* Parser::varDeclaration() {
     }
 
     consume(TokenType::SEMICOLON, "Expected ';' after variable declaration.");
-    if (initializer != nullptr) {
-        return new BinaryNode(new OpNode(TokenType::VAR), new VariableNode(name.lexeme), initializer);
-    } else {
-        return new UnaryNode(new OpNode(TokenType::VAR), new VariableNode(name.lexeme));
-    }
+
+    return new VariableDeclarationNode(name.lexeme, flags, initializer);
 }
 
 Node* Parser::funcDeclaration(std::string kind) {
     advance(); // FN
+
+    uint16_t flags = qualifiers();
+    checkQualifiers(flags, SymbolFlag::SF_IN_CLASS | SymbolFlag::SF_MUST_VAR, "a function");
 
     auto name = consume(TokenType::IDENTIFIER, "Expected " + kind + " name.").lexeme;
 
@@ -331,53 +334,101 @@ Node* Parser::funcDeclaration(std::string kind) {
     }
     Node* body = block();
 
-    return new FunctionNode(name, params, body);
+    return new FunctionNode(name, flags, params, body);
 }
 
 Node* Parser::classDeclaration() {
     advance(); // CLASS
 
-    auto name = consume(TokenType::IDENTIFIER, "Expected class name.").lexeme;
+    auto className = consume(TokenType::IDENTIFIER, "Expected class name.").lexeme;
 
     consume(TokenType::LEFT_BRACE, "Expected '{' after class name.");
 
     std::unordered_map<std::string, Node*> internals;
 
     while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
-        uint16_t flags = 0;
-
-        while (!check(TokenType::VAR) && !check(TokenType::FUNCTION)) {
-            switch (peek().type) {
-            case TokenType::PUBLIC:
-            case TokenType::PROTECTED:
-                flags |= tokenToSymbolFlag(peek().type);
-                break;
-            default:
-                error("Unexpected symbol.");
-                break;
-            }
-        }
+        uint16_t flags = qualifiers();
 
         switch (peek().type) {
-            case TokenType::VAR:{
-                if (flags | SymbolFlag::SF_NOT_VAR) {
-                    error("Attribute has forbidden flag.");
-                }
-
+            case TokenType::VAR: {
                 advance(); // VAR
+
+                checkQualifiers(flags, SymbolFlag::SF_MUST_FN, "an attribute");
 
                 auto name = consume(TokenType::IDENTIFIER, "Expected attribute name.").lexeme;
 
                 consume(TokenType::SEMICOLON, "Expected ';' after attribute declaration.");
 
+                internals.emplace(name, new VariableDeclarationNode(name, flags, nullptr));
 
+                break;
+            }
+            case TokenType::FUNCTION: {
+                advance(); // FN
+
+                checkQualifiers(flags, SymbolFlag::SF_MUST_FN, "a method");
+
+                auto name = consume(TokenType::IDENTIFIER, "Expected method name.").lexeme;
+
+                consume(TokenType::LEFT_PAREN, "Expected '(' after method name.");
+                auto params = std::vector<std::string>();
+                if (!check(TokenType::RIGHT_PAREN)) {
+                    do {
+                        if (params.size() >= 255) {
+                            errorAtCurrent("No more than 255 parameters are allowed.", true);
+                        }
+
+                        params.emplace_back(consume(TokenType::IDENTIFIER, "Expected parameter name").lexeme);
+                    } while (match(TokenType::COMMA));
+                }
+
+                consume(TokenType::RIGHT_PAREN, "Expected ')' after parameters.");
+
+                if (!check(TokenType::LEFT_BRACE)) {
+                    error("Expected '{' before method body.");
+                }
+                Node* body = block();
+
+                internals.emplace(name, new FunctionNode(name, flags, params, body));
 
                 break;
             }
         }
     }
 
-    return nullptr;
+    consume(TokenType::RIGHT_BRACE, "Expected '}' to end class declaration.");
+
+    return new ClassNode(className, internals);
+}
+
+void Parser::checkQualifiers(uint16_t flags, uint16_t forbiddenFlags, std::string type) {
+    if ((flags & forbiddenFlags) == 0) {
+        return;
+    }
+
+    auto forbiddenQualifiers = qualifiersFromForbiddenFlags(forbiddenFlags, flags);
+    auto e = std::string();
+    for (auto& t : forbiddenQualifiers) {
+        e += toLower(tokenTypeToString(t)) + ", ";
+    }
+    e.pop_back();
+    e.pop_back();
+    e += (forbiddenQualifiers.size() == 1) ? " is not a qualifier" : " are not qualifiers";
+    e += " for " + type + '.';
+
+    errorAtCurrent(e);
+}
+
+uint16_t Parser::qualifiers() {
+    uint16_t flags = 0;
+    SymbolFlag flag = tokenToSymbolFlag(peek().type);
+    while (flag != SymbolFlag::SF_NONE) {
+        flags |= flag;
+        advance();
+        flag = tokenToSymbolFlag(peek().type);
+    }
+
+    return flags;
 }
 
 Node* Parser::statement() {

@@ -14,15 +14,17 @@ SymbolFlag tokenToSymbolFlag(TokenType token) {
 }
 
 std::string symbolFlagsToString(uint16_t flags) {
+    flags &= 0b1111111111111000;
+
     std::string result = "";
-    if ((flags & SymbolFlag::SF_NOT_FN) != 0) {
-        result += "NOT_FN ";
+    if ((flags & SymbolFlag::SF_MUST_FN) != 0) {
+        result += "MUST_FN ";
     }
-    if ((flags & SymbolFlag::SF_NOT_VAR) != 0) {
-        result += "NOT_VAR ";
+    if ((flags & SymbolFlag::SF_MUST_VAR) != 0) {
+        result += "MUST_VAR ";
     }
-    if ((flags & SymbolFlag::SF_IS_CLASS) != 0) {
-        result += "IS_CLASS ";
+    if ((flags & SymbolFlag::SF_IN_CLASS) != 0) {
+        result += "IN_CLASS ";
     }
     if ((flags & SymbolFlag::SF_CONST) != 0) {
         result += "CONST ";
@@ -47,6 +49,26 @@ std::string symbolFlagsToString(uint16_t flags) {
     return result;
 }
 
+std::vector<TokenType> qualifiersFromForbiddenFlags(uint16_t forbidden, uint16_t flags) {
+    std::vector<TokenType> found;
+    if ((forbidden & SymbolFlag::SF_CONST & flags) != 0) {
+        found.emplace_back(TokenType::CONST);
+    }
+    if ((forbidden & SymbolFlag::SF_PUBLIC & flags) != 0) {
+        found.emplace_back(TokenType::PUBLIC);
+    }
+    if ((forbidden & SymbolFlag::SF_PROTECTED & flags) != 0) {
+        found.emplace_back(TokenType::PROTECTED);
+    }
+    if ((forbidden & SymbolFlag::SF_STATIC & flags) != 0) {
+        found.emplace_back(TokenType::STATIC);
+    }
+    if ((forbidden & SymbolFlag::SF_VIRTUAL & flags) != 0) {
+        found.emplace_back(TokenType::VIRTUAL);
+    }
+    return found;
+}
+
 std::ostream& operator <<(std::ostream& os, NumberNode* const& node) {
     os << "NumberNode(" << node->getValue() << ')';
     return os;
@@ -68,8 +90,10 @@ std::ostream& operator <<(std::ostream& os, VariableNode* const& node) {
 }
 
 std::ostream& operator <<(std::ostream& os, VariableDeclarationNode* const& node) {
-    os << "VariableDeclarationNode(\n" << node->getName() << '\n'
-        << "flags: " << symbolFlagsToString(node->getFlags()) << '\n';
+    os << "VariableDeclarationNode(\n" << node->getName() << '\n';
+    if (node->getFlags() != 0) {
+        os << "flags: " << symbolFlagsToString(node->getFlags()) << '\n';
+    }
     if (node->getInitializer() != nullptr) {
         os << "init: " << node->getInitializer()->toString() << '\n';
     }
@@ -103,7 +127,11 @@ std::ostream& operator <<(std::ostream& os, CallNode* const& node) {
 }
 
 std::ostream& operator <<(std::ostream& os, FunctionNode* const& node) {
-    os << "FunctionNode(" << node->getName() << "( ";
+    os << "FunctionNode(" << node->getName() << ' ';
+    if (node->getFlags() != 0) {
+        os << "flags: " << symbolFlagsToString(node->getFlags()) << '\n';
+    }
+    os << " ( ";
     for (auto const& param : node->getParams()) {
         os << param << ' ';
     };
@@ -148,6 +176,15 @@ std::ostream& operator<<(std::ostream& os, ForNode* const& node) {
         os << "inc: " << node->getIncrement()->toString() << '\n';
     }
     os << "body: " << node->getBody()->toString() << '\n';
+    os << ')';
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, ClassNode* const& node) {
+    os << "ClassNode(name: " << node->getName() << '\n';
+    for (auto const& [_, in] : node->getInternals()) {
+        os << in->toString() << '\n';
+    }
     os << ')';
     return os;
 }
@@ -209,5 +246,9 @@ std::string ForNode::toString() {
 }
 
 std::string VariableDeclarationNode::toString() {
+    return (std::stringstream() << this).str();
+}
+
+std::string ClassNode::toString() {
     return (std::stringstream() << this).str();
 }

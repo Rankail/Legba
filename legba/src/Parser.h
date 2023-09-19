@@ -48,6 +48,8 @@ public:
     Node* varDeclaration();
     Node* funcDeclaration(std::string kind);
     Node* classDeclaration();
+    uint16_t qualifiers();
+    void checkQualifiers(uint16_t flags, uint16_t forbiddenFlags, std::string type);
 
     Node* statement();
 
