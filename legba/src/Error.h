@@ -1,9 +1,10 @@
 #pragma once
 
-#include <exception>
+#include <stdexcept>
 
-class ParserError : public std::exception {
+class ParserError : public std::runtime_error {
 public:
 	ParserError() = default;
-	ParserError(const char* msg) : std::exception(msg) {}
+	explicit ParserError(const char* msg) : std::runtime_error(msg) {}
+    explicit ParserError(const std::string& arg) : std::runtime_error(arg) {}
 };

@@ -44,7 +44,7 @@ Token Lexer::scanToken() {
         case '[': return makeToken(TokenType::LEFT_BRACKET);
         case ']': return makeToken(TokenType::RIGHT_BRACKET);
         case '+': return makeToken(TokenType::PLUS);
-        case '-': return makeToken(TokenType::MINUS);
+        case '-': return makeToken(match('>') ? TokenType::RIGHT_ARROW : TokenType::MINUS);
         case '*': return makeToken(TokenType::STAR);
         case ';': return makeToken(TokenType::SEMICOLON);
         case ':': return makeToken(TokenType::COLON);
@@ -55,6 +55,7 @@ Token Lexer::scanToken() {
         case '<': return makeToken(match('=') ? TokenType::LESS_EQUAL : TokenType::LESS);
         case '>': return makeToken(match('=') ? TokenType::GREATER_EQUAL : TokenType::GREATER);
         case '"': return string();
+        case '\'': return char_();
         case '&': return makeToken(match('&') ? TokenType::AND : TokenType::BIN_AND);
         case '|': return makeToken(match('|') ? TokenType::OR : TokenType::BIN_OR);
         case '~': return makeToken(TokenType::BIN_NOT);
@@ -120,29 +121,97 @@ void Lexer::skipWhitespace() {
 }
 
 Token Lexer::string() {
+    std::string str;
+    Token token;
     while (peek() != '"' && !isAtEnd()) {
-        if (peek() == '\n') line++;
+        if (peek() == '\\') {
+            advance();
+            switch (peek()) {
+                case 'n': str += '\n'; break;
+                case 't': str += '\t'; break;
+                case 'v': str += '\v'; break;
+                case 'r': str += '\r'; break;
+                case '\'': str += '\''; break;
+                case '"': str += '"'; break;
+                case '\\': str += '\\'; break;
+                default: {
+                    token.type = TokenType::ERROR;
+                    token.lexeme = std::string("Invalid escape sequence '\\") + peek() + "'.";
+                    while (peekNext() != '"' || peek() == '\\') advance();
+                }
+            }
+        } else {
+            str += peek();
+            if (peek() == '\n') {
+                line++;
+                indexOffset = current;
+            }
+        }
         advance();
     }
+    token.line = line;
+    token.index = current - indexOffset;
+
+    if (token.type == TokenType::ERROR) {
+        advance();
+        return token;
+    }
+
+    token.type = TokenType::STRING;
+    token.lexeme = str;
 
     if (isAtEnd()) return errorToken("Unterminated string.");
 
     advance();
-    return makeToken(TokenType::STRING);
+    return token;
+}
+
+Token Lexer::char_() {
+    char c = advance();
+    if (c == '\\') {
+        switch (peek()) {
+            case 'n': c = '\n'; break;
+            case 't': c = '\t'; break;
+            case 'v': c = '\v'; break;
+            case 'r': c = '\r'; break;
+            case '\'': c = '\''; break;
+            case '"': c = '"'; break;
+            case '\\': c = '\\'; break;
+            default: {
+                advance();
+                return errorToken(std::string("Invalid escape sequence '\\") + peek() + "'.");
+            }
+        }
+        advance();
+    }
+
+    if (peek() != '\'') {
+        return errorToken("Expected ' after char.");
+    }
+
+    advance();
+    
+    Token token;
+    token.type = TokenType::CHAR;
+    token.lexeme = c;
+    token.line = line;
+    token.index = current - indexOffset;
+
+    return token;
 }
 
 Token Lexer::number() {
     while (isDigit(peek())) advance();
 
-    if (peek() != '.' || !isDigit(peekNext())) {
-        return makeToken(TokenType::NUMBER);
+    if (peek() != '.') {
+        return makeToken(TokenType::INTEGER);
     }
 
     advance();
 
     while (isDigit(peek())) advance();
 
-    return makeToken(TokenType::NUMBER);
+    return makeToken(TokenType::DOUBLE);
 }
 
 Token Lexer::identifier() {

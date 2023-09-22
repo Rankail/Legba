@@ -4,30 +4,51 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 #include "misc/Utils.h"
 #include "Token.h"
-#include <unordered_map>
+#include "ValueType.h"
 
 enum class NodeType {
-    NUMBER, STRING, BOOL, VARIABLE, VARIABLE_DECL, OP, UNARY, BINARY, SCOPE, IF, WHILE, FOR, CALL, FUNCTION, CLASS
+    INTEGER, DOUBLE, STRING, CHAR, BOOL,
+    VARIABLE, VARIABLE_DECL,
+    OP, UNARY, BINARY,
+    SCOPE, IF, WHILE, FOR,
+    CALL, FUNCTION, CLASS
 };
 
 class Node {
 public:
-    Node(NodeType type) : type(type) {}
+    Node(NodeType type, ValueType resultType = ValueType()) : type(type), resultType(resultType) {}
     virtual ~Node() = default;
 
-    virtual NodeType getType() const { return type; };
+    NodeType getType() const { return type; };
     virtual std::string toString() = 0;
 
+    void setResultType(ValueType resultType);
+    ValueType getResultType() const { return resultType; }
+
 protected:
+    ValueType resultType;
     NodeType type;
 };
 
-class NumberNode : public Node {
+class IntegerNode : public Node {
 public:
-    NumberNode(Token token) : Node(NodeType::NUMBER), value(std::stod(token.lexeme)) {}
+    IntegerNode(Token token) : Node(NodeType::INTEGER, ValueType(ValueTypeEnum::VT_INTEGER)), value(std::stoi(token.lexeme)) {}
+
+    int getValue() const { return value; }
+
+    virtual std::string toString() override;
+
+private:
+    int value;
+};
+
+class DoubleNode : public Node {
+public:
+    DoubleNode(Token token) : Node(NodeType::DOUBLE, ValueType(ValueTypeEnum::VT_DOUBLE)), value(std::stod(token.lexeme)) {}
 
     double getValue() const { return value; }
 
@@ -39,7 +60,7 @@ private:
 
 class StringNode : public Node {
 public:
-    StringNode(Token token) : Node(NodeType::STRING), value(token.lexeme) {}
+    StringNode(Token token) : Node(NodeType::STRING, ValueType(ValueTypeEnum::VT_STRING)), value(token.lexeme) {}
 
     std::string getValue() const { return value; }
 
@@ -49,9 +70,21 @@ private:
     std::string value;
 };
 
+class CharNode : public Node {
+public:
+    CharNode(Token token) : Node(NodeType::CHAR, ValueType(ValueTypeEnum::VT_CHAR)), value(token.lexeme[0]) {}
+
+    char getValue() const { return value; }
+
+    virtual std::string toString() override;
+
+private:
+    char value;
+};
+
 class BoolNode : public Node {
 public:
-    BoolNode(bool boolean) : Node(NodeType::BOOL), value(boolean) {}
+    BoolNode(bool boolean) : Node(NodeType::BOOL, ValueType(ValueTypeEnum::VT_BOOL)), value(boolean) {}
 
     bool getValue() const { return value; }
 
@@ -138,7 +171,7 @@ private:
 class ScopeNode : public Node {
 public:
     ScopeNode(ScopeNode* enclosing = nullptr)
-        : Node(NodeType::SCOPE), enclosing(enclosing), statements() {
+        : Node(NodeType::SCOPE, ValueType(ValueTypeEnum::VT_VOID)), enclosing(enclosing), statements() {
     }
 
     ScopeNode* getEnclosing() const { return enclosing; }
@@ -156,7 +189,7 @@ private:
 class IfNode : public Node {
 public:
     IfNode(Node* condition, Node* thenBranch, Node* elseBranch)
-        : Node(NodeType::IF), condition(condition), thenBranch(thenBranch), elseBranch(elseBranch) {}
+        : Node(NodeType::IF, ValueType(ValueTypeEnum::VT_VOID)), condition(condition), thenBranch(thenBranch), elseBranch(elseBranch) {}
 
     Node* getCondition() const { return condition; }
     Node* getThenBranch() const { return thenBranch; }
@@ -173,7 +206,7 @@ private:
 class WhileNode : public Node {
 public:
     WhileNode(Node* condition, Node* body)
-        : Node(NodeType::WHILE), condition(condition), body(body) {
+        : Node(NodeType::WHILE, ValueType(ValueTypeEnum::VT_VOID)), condition(condition), body(body) {
     }
 
     Node* getCondition() const { return condition; }
@@ -189,7 +222,7 @@ private:
 class ForNode : public Node {
 public:
     ForNode(Node* initializer, Node* condition, Node* increment, Node* body)
-        : Node(NodeType::FOR), initializer(initializer), condition(condition), increment(increment), body(body) {
+        : Node(NodeType::FOR, ValueType(ValueTypeEnum::VT_VOID)), initializer(initializer), condition(condition), increment(increment), body(body) {
     }
 
     Node* getInitializer() const { return initializer; }
@@ -274,20 +307,7 @@ private:
     std::unordered_map<std::string, Node*> internals;
 };
 
-std::ostream& operator <<(std::ostream& os, NumberNode* const& node);
-std::ostream& operator <<(std::ostream& os, StringNode* const& node);
-std::ostream& operator <<(std::ostream& os, BoolNode* const& node);
-std::ostream& operator <<(std::ostream& os, VariableNode* const& node);
-std::ostream& operator <<(std::ostream& os, OpNode* const& node);
-std::ostream& operator <<(std::ostream& os, UnaryNode* const& node);
-std::ostream& operator <<(std::ostream& os, BinaryNode* const& node);
-std::ostream& operator <<(std::ostream& os, CallNode* const& node);
-std::ostream& operator <<(std::ostream& os, FunctionNode* const& node);
-std::ostream& operator <<(std::ostream& os, ScopeNode* const& node);
-std::ostream& operator <<(std::ostream& os, IfNode* const& node);
-std::ostream& operator <<(std::ostream& os, WhileNode* const& node);
-std::ostream& operator <<(std::ostream& os, ForNode* const& node);
-std::ostream& operator <<(std::ostream& os, ClassNode* const& node);
+std::ostream& operator <<(std::ostream& os, Node* const& node);
 
 
 #endif //LEGBA_NODE_H

@@ -17,6 +17,7 @@ std::string tokenTypeToString(TokenType type) {
         case TokenType::STAR: return "STAR";
         case TokenType::SLASH: return "SLASH";
         case TokenType::MODULO: return "MODULO";
+        case TokenType::RIGHT_ARROW: return "RIGHT_ARROW";
         case TokenType::BANG: return "BANG";
         case TokenType::BANG_EQUAL: return "BANG_EQUAL";
         case TokenType::EQUAL: return "EQUAL";
@@ -27,7 +28,9 @@ std::string tokenTypeToString(TokenType type) {
         case TokenType::GREATER_EQUAL: return "GREATER_EQUAL";
         case TokenType::IDENTIFIER: return "IDENTIFIER";
         case TokenType::STRING: return "STRING";
-        case TokenType::NUMBER: return "NUMBER";
+        case TokenType::CHAR: return "CHAR";
+        case TokenType::INTEGER: return "INTEGER";
+        case TokenType::DOUBLE: return "DOUBLE";
         case TokenType::AND: return "AND";
         case TokenType::OR: return "OR";
         case TokenType::BIN_AND: return "BIN_AND";

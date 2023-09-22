@@ -29,6 +29,8 @@ public:
     Token previous();
     void printEnv();
 
+    ValueType valueType();
+
     // Expression
     Node* expression();
     Node* assignement();
@@ -45,9 +47,9 @@ public:
     // Statement
     Node* declaration();
 
-    Node* varDeclaration();
-    Node* funcDeclaration(std::string kind);
-    Node* classDeclaration();
+    Node* varDeclaration(uint16_t flags);
+    Node* funcDeclaration(uint16_t flags);
+    Node* classDeclaration(uint16_t flags);
     uint16_t qualifiers();
     void checkQualifiers(uint16_t flags, uint16_t forbiddenFlags, std::string type);
 

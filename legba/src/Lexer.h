@@ -3,10 +3,14 @@
 
 #include <vector>
 #include <string>
+
 #include "Token.h"
 
 class Lexer {
 public:
+    Lexer() 
+        : current(0), start(0), line(1), indexOffset(0) { }
+
     std::vector<Token> lex(const std::string& source);
 
 private:
@@ -18,6 +22,7 @@ private:
     void skipWhitespace();
 
     Token string();
+    Token char_();
     Token number();
     Token identifier();
 

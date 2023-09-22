@@ -1,9 +1,9 @@
 #include "Parser.h"
 
-#include "Error.h"
-
 #include <format>
 #include <algorithm>
+
+#include "Error.h"
 
 Parser::Parser()
     : hadError(false), current(0), tokens(), rootScope(nullptr), scope(nullptr) {
@@ -44,11 +44,12 @@ void Parser::errorAt(Token *token, const std::string &msg, bool noThrow) {
     } else if (token->type == TokenType::ERROR) {
 
     } else {
-        e += std::format(" at '{}'", token->lexeme);
+        e += " at '" + token->lexeme + '\'';
     }
 
-    e += std::format(": {}\n", msg);
-    fprintf(stderr, e.c_str());
+    e += ": " + msg;
+
+    std::cout << e << std::endl;
     hadError = true;
 
     if (!noThrow) {
@@ -62,6 +63,8 @@ void Parser::synchronize() {
         switch (peek().type) {
             case TokenType::CLASS:
             case TokenType::FUNCTION:
+                scope = rootScope;
+                return;
             case TokenType::VAR:
             case TokenType::FOR:
             case TokenType::IF:
@@ -119,6 +122,14 @@ Token Parser::previous() {
 
 void Parser::printEnv() {
     std::cout << rootScope->toString() << std::endl;
+}
+
+ValueType Parser::valueType() {
+    Token type = consume(TokenType::IDENTIFIER, "Expected type.");
+
+    ValueType::fromString(type.lexeme);
+
+    return ValueType();
 }
 
 // Expression
@@ -238,8 +249,16 @@ Node* Parser::primary() {
         return new StringNode(previous());
     }
 
-    if (match(TokenType::NUMBER)) {
-        return new NumberNode(previous());
+    if (match(TokenType::INTEGER)) {
+        return new IntegerNode(previous());
+    }
+
+    if (match(TokenType::DOUBLE)) {
+        return new DoubleNode(previous());
+    }
+
+    if (match(TokenType::CHAR)) {
+        return new CharNode(previous());
     }
 
     if (match(TokenType::IDENTIFIER)) {
@@ -257,7 +276,7 @@ Node* Parser::primary() {
 }
 
 Node* Parser::call() {
-    auto name = previous().lexeme;
+    std::string name = previous().lexeme;
 
     if (!match(TokenType::LEFT_PAREN)) {
         return new VariableNode(name);
@@ -281,18 +300,22 @@ Node* Parser::call() {
 // Statements
 
 Node* Parser::declaration() {
+    uint16_t flags = qualifiers();
     switch (peek().type) {
-        case TokenType::VAR: return varDeclaration();
-        case TokenType::FUNCTION: return funcDeclaration("function");
-        case TokenType::CLASS: return classDeclaration();
-        default: return statement();
+        case TokenType::VAR: return varDeclaration(flags);
+        case TokenType::FUNCTION: return funcDeclaration(flags);
+        case TokenType::CLASS: return classDeclaration(flags);
     }
+    if (flags != 0) {
+        errorAtCurrent("Expected a variable, function or class declaration after qualifiers.");
+    }
+
+    return statement();
 }
 
-Node* Parser::varDeclaration() {
+Node* Parser::varDeclaration(uint16_t flags) {
     advance(); // VAR
 
-    uint16_t flags = qualifiers();
     checkQualifiers(flags, SymbolFlag::SF_IN_CLASS | SymbolFlag::SF_MUST_FN, "a variable");
 
     Token name = consume(TokenType::IDENTIFIER, "Expected variable name.");
@@ -307,15 +330,18 @@ Node* Parser::varDeclaration() {
     return new VariableDeclarationNode(name.lexeme, flags, initializer);
 }
 
-Node* Parser::funcDeclaration(std::string kind) {
+Node* Parser::funcDeclaration(uint16_t flags) {
     advance(); // FN
 
-    uint16_t flags = qualifiers();
+    if (scope->getEnclosing() != nullptr) {
+        error("Class declarations must be top level.", true);
+    }
+
     checkQualifiers(flags, SymbolFlag::SF_IN_CLASS | SymbolFlag::SF_MUST_VAR, "a function");
 
-    auto name = consume(TokenType::IDENTIFIER, "Expected " + kind + " name.").lexeme;
+    std::string name = consume(TokenType::IDENTIFIER, "Expected function name.").lexeme;
 
-    consume(TokenType::LEFT_PAREN, "Expected '(' after " + kind + " name.");
+    consume(TokenType::LEFT_PAREN, "Expected '(' after function name.");
     auto params = std::vector<std::string>();
     if (!check(TokenType::RIGHT_PAREN)) {
         do {
@@ -329,18 +355,31 @@ Node* Parser::funcDeclaration(std::string kind) {
 
     consume(TokenType::RIGHT_PAREN, "Expected ')' after parameters.");
 
+    ValueType resultType;
+    if (match(TokenType::RIGHT_ARROW)) {
+        resultType = valueType();
+    } else {
+        resultType.setType(ValueTypeEnum::VT_VOID);
+    }
+
     if (!check(TokenType::LEFT_BRACE)) {
-        error("Expected '{' before " + kind + " body.");
+        error("Expected '{' before function body.");
     }
     Node* body = block();
 
-    return new FunctionNode(name, flags, params, body);
+    Node* func = new FunctionNode(name, flags, params, body);
+    func->setResultType(resultType);
+    return func;
 }
 
-Node* Parser::classDeclaration() {
+Node* Parser::classDeclaration(uint16_t flags) {
     advance(); // CLASS
 
-    auto className = consume(TokenType::IDENTIFIER, "Expected class name.").lexeme;
+    if (scope->getEnclosing() != nullptr) {
+        error("Class declarations must be top level.", true);
+    }
+
+    std::string className = consume(TokenType::IDENTIFIER, "Expected class name.").lexeme;
 
     consume(TokenType::LEFT_BRACE, "Expected '{' after class name.");
 
@@ -355,7 +394,7 @@ Node* Parser::classDeclaration() {
 
                 checkQualifiers(flags, SymbolFlag::SF_MUST_FN, "an attribute");
 
-                auto name = consume(TokenType::IDENTIFIER, "Expected attribute name.").lexeme;
+                std::string name = consume(TokenType::IDENTIFIER, "Expected attribute name.").lexeme;
 
                 consume(TokenType::SEMICOLON, "Expected ';' after attribute declaration.");
 
@@ -366,9 +405,9 @@ Node* Parser::classDeclaration() {
             case TokenType::FUNCTION: {
                 advance(); // FN
 
-                checkQualifiers(flags, SymbolFlag::SF_MUST_FN, "a method");
+                checkQualifiers(flags, SymbolFlag::SF_MUST_VAR, "a method");
 
-                auto name = consume(TokenType::IDENTIFIER, "Expected method name.").lexeme;
+                std::string name = consume(TokenType::IDENTIFIER, "Expected method name.").lexeme;
 
                 consume(TokenType::LEFT_PAREN, "Expected '(' after method name.");
                 auto params = std::vector<std::string>();
@@ -493,12 +532,21 @@ Node* Parser::forStatement() {
 
     consume(TokenType::LEFT_PAREN, "Expected '(' after 'for'.");
     Node* initializer;
-    if (match(TokenType::SEMICOLON)) {
-        initializer = nullptr;
-    } else if (check(TokenType::VAR)) {
-        initializer = varDeclaration();
+
+    uint16_t flags = qualifiers();
+
+    if (check(TokenType::VAR)) {
+        initializer = varDeclaration(flags);
     } else {
-        initializer = expressionStatement();
+        if (flags != 0) {
+            errorAtCurrent("Expected variable declaration after qualifiers.");
+        }
+
+        if (match(TokenType::SEMICOLON)) {
+            initializer = nullptr;
+        } else {
+            initializer = expressionStatement();
+        }
     }
 
     Node* condition = nullptr;
