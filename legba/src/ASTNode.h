@@ -94,35 +94,6 @@ private:
     bool value;
 };
 
-class VariableNode : public Node {
-public:
-    VariableNode(const std::string& name) : Node(NodeType::VARIABLE), name(name) {}
-
-    std::string getName() const { return name; }
-
-    virtual std::string toString() override;
-
-private:
-    std::string name;
-};
-
-class VariableDeclarationNode : public Node {
-public:
-    VariableDeclarationNode(const std::string& name, uint16_t flags, Node* initializer) :
-        Node(NodeType::VARIABLE_DECL), name(name), flags(flags), initializer(initializer) {}
-
-    std::string getName() const { return name; }
-    uint16_t getFlags() const { return flags; }
-    Node* getInitializer() const { return initializer; }
-
-    virtual std::string toString() override;
-
-private:
-    std::string name;
-    uint16_t flags;
-    Node* initializer;
-};
-
 class OpNode : public Node {
 public:
     OpNode(TokenType op) : Node(NodeType::OP), op(op) {}
@@ -168,6 +139,93 @@ private:
     Node* right;
 };
 
+enum SymbolFlag : uint16_t {
+    SF_NONE = 0,
+    SF_MUST_FN = BIT(0),
+    SF_MUST_VAR = BIT(1),
+    SF_IN_CLASS = BIT(2),
+
+    SF_CONST = BIT(7) | BIT(1),
+    SF_PUBLIC = BIT(8) | BIT(2),
+    SF_PROTECTED = BIT(9) | BIT(2),
+    SF_STATIC = BIT(10) | BIT(2),
+    SF_VIRTUAL = BIT(11) | BIT(0) | BIT(2)
+};
+
+SymbolFlag tokenToSymbolFlag(TokenType token);
+std::string symbolFlagsToString(uint16_t flags);
+std::vector<TokenType> qualifiersFromForbiddenFlags(uint16_t x, uint16_t flags);
+
+class VariableDeclarationNode : public Node {
+public:
+    VariableDeclarationNode(const std::string& name, uint16_t flags, Node* initializer) :
+        Node(NodeType::VARIABLE_DECL), name(name), flags(flags), initializer(initializer) {
+    }
+
+    std::string getName() const { return name; }
+    uint16_t getFlags() const { return flags; }
+    Node* getInitializer() const { return initializer; }
+
+    virtual std::string toString() override;
+
+private:
+    std::string name;
+    uint16_t flags;
+    Node* initializer;
+};
+
+class VariableNode : public Node {
+public:
+    VariableNode(VariableDeclarationNode* var) : Node(NodeType::VARIABLE), var(var) {}
+
+    VariableDeclarationNode* getVar() const { return var; }
+
+    virtual std::string toString() override;
+
+private:
+    VariableDeclarationNode* var;
+};
+
+class FunctionNode : public Node {
+public:
+    FunctionNode(const std::string& name, uint16_t flags, std::vector<std::string> params, Node* body)
+        : Node(NodeType::FUNCTION), name(name), flags(flags), params(std::move(params)), body(std::move(body)) {
+    }
+
+    std::string getName() const { return name; }
+    uint16_t getFlags() const { return flags; }
+    std::vector<std::string> getParams() const { return params; }
+    Node* getBody() const { return body; }
+
+    virtual std::string toString() override;
+
+private:
+    std::string name;
+    uint16_t flags;
+    std::vector<std::string> params;
+    Node* body;
+};
+
+class CallNode : public Node {
+public:
+    CallNode(const std::string& callee, std::vector<Node*> args, FunctionNode* func = nullptr)
+        : Node(NodeType::CALL), callee(callee), args(std::move(args)), func(func) {
+    }
+
+    std::string getCallee() const { return callee; }
+    std::vector<Node*> getArgs() const { return args; }
+
+    FunctionNode* getFunction() const { return func; }
+    void setFunction(FunctionNode* func);
+
+    virtual std::string toString() override;
+
+private:
+    std::string callee;
+    std::vector<Node*> args;
+    FunctionNode* func;
+};
+
 class ScopeNode : public Node {
 public:
     ScopeNode(ScopeNode* enclosing = nullptr)
@@ -178,12 +236,19 @@ public:
     std::vector<Node*> getStatements() const { return statements; }
 
     void addStatement(Node* node);
+    void addVariable(std::string name, VariableDeclarationNode* var);
+    void addFunction(std::string name, FunctionNode* func);
+
+    VariableDeclarationNode* getVariable(const std::string& name);
+    FunctionNode* getFunction(CallNode* callee);
 
     virtual std::string toString() override;
 
 private:
     ScopeNode* enclosing;
     std::vector<Node*> statements;
+    std::unordered_map<std::string, VariableDeclarationNode*> variables;
+    std::unordered_map<std::string, FunctionNode*> functions;
 };
 
 class IfNode : public Node {
@@ -236,59 +301,6 @@ private:
     Node* initializer;
     Node* condition;
     Node* increment;
-    Node* body;
-};
-
-class CallNode : public Node {
-public:
-    CallNode(const std::string& callee, std::vector<Node*> args)
-        : Node(NodeType::CALL), callee(callee), args(std::move(args)) {
-    }
-
-    std::string getCallee() const { return callee; }
-    std::vector<Node*> getArgs() const { return args; }
-
-    virtual std::string toString() override;
-
-private:
-    std::string callee;
-    std::vector<Node*> args;
-};
-
-enum SymbolFlag : uint16_t {
-    SF_NONE =       0,
-    SF_MUST_FN =    BIT(0),
-    SF_MUST_VAR =   BIT(1),
-    SF_IN_CLASS =   BIT(2),
-
-    SF_CONST =      BIT(7) | BIT(1),
-    SF_PUBLIC =     BIT(8) | BIT(2),
-    SF_PROTECTED =  BIT(9) | BIT(2),
-    SF_STATIC =     BIT(10) | BIT(2),
-    SF_VIRTUAL =    BIT(11) | BIT(0) | BIT(2)
-};
-
-SymbolFlag tokenToSymbolFlag(TokenType token);
-std::string symbolFlagsToString(uint16_t flags);
-std::vector<TokenType> qualifiersFromForbiddenFlags(uint16_t x, uint16_t flags);
-
-class FunctionNode : public Node {
-public:
-    FunctionNode(const std::string& name, uint16_t flags, std::vector<std::string> params, Node* body)
-        : Node(NodeType::FUNCTION), name(name), flags(flags), params(std::move(params)), body(std::move(body)) {
-    }
-
-    std::string getName() const { return name; }
-    uint16_t getFlags() const { return flags; }
-    std::vector<std::string> getParams() const { return params; }
-    Node* getBody() const { return body; }
-
-    virtual std::string toString() override;
-
-private:
-    std::string name;
-    uint16_t flags;
-    std::vector<std::string> params;
     Node* body;
 };
 

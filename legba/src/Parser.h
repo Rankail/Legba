@@ -68,7 +68,8 @@ private:
     int current;
     bool hadError;
     ScopeNode* rootScope;
-    ScopeNode* scope;
+    ScopeNode* curScope;
+    std::vector<std::pair<ScopeNode*, CallNode*>> unresolvedCalls;
 };
 
 

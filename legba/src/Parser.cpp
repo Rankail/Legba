@@ -6,21 +6,31 @@
 #include "Error.h"
 
 Parser::Parser()
-    : hadError(false), current(0), tokens(), rootScope(nullptr), scope(nullptr) {
+    : hadError(false), current(0), tokens(), unresolvedCalls(), rootScope(nullptr), curScope(nullptr) {
 }
 
 bool Parser::parse(const std::vector<Token> &tokens) {
     this->tokens = tokens;
     hadError = false;
     rootScope = new ScopeNode();
-    scope = rootScope;
+    curScope = rootScope;
     
     while (!isAtEnd()) {
         try {
-            scope->addStatement(declaration());
+            curScope->addStatement(declaration());
         } catch (ParserError const& e) {
             synchronize();
         }
+    }
+
+    for (auto [scope, callee] : unresolvedCalls) {
+        auto func = scope->getFunction(callee);
+        if (func == nullptr) {
+            std::cout << "Error: No function named '" << callee->getCallee() << "'." << std::endl;
+        } else {
+            callee->setFunction(func);
+        }
+
     }
 
     return !hadError;
@@ -63,7 +73,7 @@ void Parser::synchronize() {
         switch (peek().type) {
             case TokenType::CLASS:
             case TokenType::FUNCTION:
-                scope = rootScope;
+                curScope = rootScope;
                 return;
             case TokenType::VAR:
             case TokenType::FOR:
@@ -127,9 +137,7 @@ void Parser::printEnv() {
 ValueType Parser::valueType() {
     Token type = consume(TokenType::IDENTIFIER, "Expected type.");
 
-    ValueType::fromString(type.lexeme);
-
-    return ValueType();
+    return ValueType::fromString(type.lexeme);
 }
 
 // Expression
@@ -279,7 +287,11 @@ Node* Parser::call() {
     std::string name = previous().lexeme;
 
     if (!match(TokenType::LEFT_PAREN)) {
-        return new VariableNode(name);
+        auto var = curScope->getVariable(name);
+        if (var == nullptr) {
+            error("No variable named '" + name + "'.", true);
+        }
+        return new VariableNode(var);
     }
 
     auto args = std::vector<Node*>();
@@ -293,6 +305,15 @@ Node* Parser::call() {
     }
 
     consume(TokenType::RIGHT_PAREN, "Expected ')' after arguments.");
+
+    auto callee = new CallNode(name, args);
+
+    auto func = curScope->getFunction(callee);
+    if (func != nullptr) {
+        callee->setFunction(func);
+    } else {
+        unresolvedCalls.push_back(std::make_pair(curScope, callee));
+    }
 
     return new CallNode(name, args);
 }
@@ -327,13 +348,17 @@ Node* Parser::varDeclaration(uint16_t flags) {
 
     consume(TokenType::SEMICOLON, "Expected ';' after variable declaration.");
 
-    return new VariableDeclarationNode(name.lexeme, flags, initializer);
+    auto var = new VariableDeclarationNode(name.lexeme, flags, initializer);
+    
+    curScope->addVariable(name.lexeme, var);
+
+    return var;
 }
 
 Node* Parser::funcDeclaration(uint16_t flags) {
     advance(); // FN
 
-    if (scope->getEnclosing() != nullptr) {
+    if (curScope->getEnclosing() != nullptr) {
         error("Class declarations must be top level.", true);
     }
 
@@ -367,15 +392,18 @@ Node* Parser::funcDeclaration(uint16_t flags) {
     }
     Node* body = block();
 
-    Node* func = new FunctionNode(name, flags, params, body);
+    auto func = new FunctionNode(name, flags, params, body);
     func->setResultType(resultType);
+
+    curScope->addFunction(name, func);
+
     return func;
 }
 
 Node* Parser::classDeclaration(uint16_t flags) {
     advance(); // CLASS
 
-    if (scope->getEnclosing() != nullptr) {
+    if (curScope->getEnclosing() != nullptr) {
         error("Class declarations must be top level.", true);
     }
 
@@ -423,12 +451,21 @@ Node* Parser::classDeclaration(uint16_t flags) {
 
                 consume(TokenType::RIGHT_PAREN, "Expected ')' after parameters.");
 
+                ValueType resultType;
+                if (match(TokenType::RIGHT_ARROW)) {
+                    resultType = valueType();
+                } else {
+                    resultType.setType(ValueTypeEnum::VT_VOID);
+                }
+
                 if (!check(TokenType::LEFT_BRACE)) {
                     error("Expected '{' before method body.");
                 }
                 Node* body = block();
 
-                internals.emplace(name, new FunctionNode(name, flags, params, body));
+                Node* func = new FunctionNode(name, flags, params, body);
+                func->setResultType(resultType);
+                internals.emplace(name, func);
 
                 break;
             }
@@ -484,17 +521,17 @@ Node* Parser::statement() {
 Node* Parser::block() {
     advance(); // {
 
-    scope = new ScopeNode(scope);
+    curScope = new ScopeNode(curScope);
 
     while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
-        scope->addStatement(declaration());
+        curScope->addStatement(declaration());
     }
 
     consume(TokenType::RIGHT_BRACE, "Expected '}' after block.");
 
-    Node* newScope = scope;
+    Node* newScope = curScope;
     
-    scope = scope->getEnclosing();
+    curScope = curScope->getEnclosing();
     
     return newScope;
 }

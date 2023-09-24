@@ -1,6 +1,7 @@
 #include "ASTNode.h"
 
 #include <sstream>
+#include "Error.h"
 
 SymbolFlag tokenToSymbolFlag(TokenType token) {
     switch (token) {
@@ -101,7 +102,7 @@ std::string BoolNode::toString() {
 
 std::string VariableNode::toString() {
 	std::stringstream os;
-    os << "VariableNode(" << getName() << ')';
+    os << "VariableNode(" << getVar() << ')';
     return os.str();
 }
 
@@ -135,6 +136,10 @@ std::string BinaryNode::toString() {
 	std::stringstream os;
     os << "BinaryNode(" << getLeft() << ' ' << getOp() << ' ' << getRight() << ')';
     return os.str();
+}
+
+void CallNode::setFunction(FunctionNode* func) {
+    this->func = func;
 }
 
 std::string CallNode::toString() {
@@ -218,6 +223,50 @@ std::string ClassNode::toString() {
 
 void ScopeNode::addStatement(Node* node) {
     statements.emplace_back(node);
+}
+
+void ScopeNode::addVariable(std::string name, VariableDeclarationNode* var) {
+    if (functions.contains(name)) {
+        throw ParserError("There already exists a function named '" + name + "' in this scope.");
+    }
+    variables.emplace(name, var); // allows shadowing; be careful with multiple passes!
+}
+
+void ScopeNode::addFunction(std::string name, FunctionNode* func) {
+    if (variables.contains(name)) {
+        throw ParserError("There already exists a variable named '" + name + "' in this scope.");
+    } else if (functions.contains(name)) {
+        throw ParserError("There already exists a function named '" + name + "' in this scope.");
+    }
+    functions.emplace(name, func);
+}
+
+VariableDeclarationNode* ScopeNode::getVariable(const std::string& name) {
+    auto it = variables.find(name);
+    if (it != variables.end()) {
+        return it->second;
+    }
+    
+    if (enclosing == nullptr) {
+        return nullptr;
+    }
+
+    return enclosing->getVariable(name);
+}
+
+FunctionNode* ScopeNode::getFunction(CallNode* callee) { // functions should be accessible even if declared after the call -> cache unresolved calls
+    auto it = functions.find(callee->getCallee());
+    if (it != functions.end()) {
+
+
+        return it->second;
+    }
+
+    if (enclosing == nullptr) {
+        return nullptr;
+    }
+
+    return enclosing->getFunction(callee);
 }
 
 void Node::setResultType(ValueType resultType) {
