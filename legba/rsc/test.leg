@@ -11,7 +11,7 @@ class Foo {
 	static const var something;
 
 	public fn b() {
-		print(a);
+		print(this.a);
 	}
 
 	virtual protected fn somethingMore(s1, s2, s3) -> bool {

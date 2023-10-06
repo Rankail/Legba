@@ -242,7 +242,45 @@ Node* Parser::unary() {
         return new UnaryNode(op, right);
     }
 
-    return primary();
+    return call();
+}
+
+Node* Parser::call() {
+    auto expr = primary();
+
+    for (;;) {
+        if (match(TokenType::LEFT_PAREN)) {
+            expr = finishCall(expr);
+        } else if (match(TokenType::DOT)) {
+            auto name = consume(TokenType::IDENTIFIER, "Expected attribute name after '.'.").lexeme;
+            expr = new BinaryNode(TokenType::DOT, expr, new IdentifierNode(name));
+        } else {
+            break;
+        }
+    }
+
+    return expr;
+}
+
+Node* Parser::finishCall(Node* callee) {
+
+    auto args = std::vector<Node*>();
+    if (!check(TokenType::RIGHT_PAREN)) {
+        do {
+            if (args.size() >= 255) {
+                errorAtCurrent("No more than 255 arguments are allowed.", true);
+            }
+            args.emplace_back(expression());
+        } while (match(TokenType::COMMA));
+    }
+
+    consume(TokenType::RIGHT_PAREN, "Expected ')' after arguments.");
+
+    CallNode* call = new CallNode(callee, args);
+
+    unresolvedCalls.emplace_back(std::make_pair(curScope, call));
+
+    return call;
 }
 
 Node* Parser::primary() {
@@ -270,7 +308,7 @@ Node* Parser::primary() {
     }
 
     if (match(TokenType::IDENTIFIER)) {
-        return call();
+        return new IdentifierNode(previous().lexeme);
     }
 
     if (match(TokenType::LEFT_PAREN)) {
@@ -281,41 +319,6 @@ Node* Parser::primary() {
 
     advance();
     errorAt(&tokens[current - 1], "Malformed expression");
-}
-
-Node* Parser::call() {
-    std::string name = previous().lexeme;
-
-    if (!match(TokenType::LEFT_PAREN)) {
-        auto var = curScope->getVariable(name);
-        if (var == nullptr) {
-            error("No variable named '" + name + "'.", true);
-        }
-        return new VariableNode(var);
-    }
-
-    auto args = std::vector<Node*>();
-    if (!check(TokenType::RIGHT_PAREN)) {
-        do {
-            if (args.size() >= 255) {
-                errorAtCurrent("No more than 255 arguments are allowed.", true);
-            }
-            args.emplace_back(expression());
-        } while (match(TokenType::COMMA));
-    }
-
-    consume(TokenType::RIGHT_PAREN, "Expected ')' after arguments.");
-
-    auto callee = new CallNode(name, args);
-
-    auto func = curScope->getFunction(callee);
-    if (func != nullptr) {
-        callee->setFunction(func);
-    } else {
-        unresolvedCalls.push_back(std::make_pair(curScope, callee));
-    }
-
-    return new CallNode(name, args);
 }
 
 // Statements
@@ -411,7 +414,7 @@ Node* Parser::classDeclaration(uint16_t flags) {
 
     consume(TokenType::LEFT_BRACE, "Expected '{' after class name.");
 
-    std::unordered_map<std::string, Node*> internals;
+    ClassNode* klass = new ClassNode(className);
 
     while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
         uint16_t flags = qualifiers();
@@ -426,7 +429,7 @@ Node* Parser::classDeclaration(uint16_t flags) {
 
                 consume(TokenType::SEMICOLON, "Expected ';' after attribute declaration.");
 
-                internals.emplace(name, new VariableDeclarationNode(name, flags, nullptr));
+                klass->addAttribute(name, new VariableDeclarationNode(name, flags, nullptr));
 
                 break;
             }
@@ -463,9 +466,9 @@ Node* Parser::classDeclaration(uint16_t flags) {
                 }
                 Node* body = block();
 
-                Node* func = new FunctionNode(name, flags, params, body);
-                func->setResultType(resultType);
-                internals.emplace(name, func);
+                auto method = new MethodNode(name, flags, params, body, klass);
+                method->setResultType(resultType);
+                klass->addMethod(name, method);
 
                 break;
             }
@@ -474,7 +477,7 @@ Node* Parser::classDeclaration(uint16_t flags) {
 
     consume(TokenType::RIGHT_BRACE, "Expected '}' to end class declaration.");
 
-    return new ClassNode(className, internals);
+    return klass;
 }
 
 void Parser::checkQualifiers(uint16_t flags, uint16_t forbiddenFlags, std::string type) {

@@ -43,6 +43,7 @@ public:
     Node* unary();
     Node* primary();
     Node* call();
+    Node* finishCall(Node* callee);
 
     // Statement
     Node* declaration();

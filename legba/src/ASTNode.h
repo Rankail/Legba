@@ -12,10 +12,10 @@
 
 enum class NodeType {
     INTEGER, DOUBLE, STRING, CHAR, BOOL,
-    VARIABLE, VARIABLE_DECL,
+    VARIABLE, VARIABLE_DECL, IDENTIFIER,
     OP, UNARY, BINARY,
     SCOPE, IF, WHILE, FOR,
-    CALL, FUNCTION, CLASS
+    CALL, FUNCTION, CLASS, METHOD
 };
 
 class Node {
@@ -124,6 +124,9 @@ private:
 
 class BinaryNode : public Node {
 public:
+    BinaryNode(TokenType opToken, Node* left, Node* right)
+        : Node(NodeType::BINARY), op(new OpNode(opToken)), left(std::move(left)), right(std::move(right)) {}
+
     BinaryNode(OpNode* op, Node* left, Node* right)
         : Node(NodeType::BINARY), op(std::move(op)), left(std::move(left)), right(std::move(right)) {}
 
@@ -137,6 +140,19 @@ private:
     OpNode* op;
     Node* left;
     Node* right;
+};
+
+class IdentifierNode : public Node {
+public:
+    IdentifierNode(std::string name)
+        : Node(NodeType::IDENTIFIER), name(name) { }
+
+    std::string getName() const { return name; }
+
+    virtual std::string toString() override;
+
+private:
+    std::string name;
 };
 
 enum SymbolFlag : uint16_t {
@@ -206,13 +222,37 @@ private:
     Node* body;
 };
 
+class ClassNode;
+
+class MethodNode : public Node {
+public:
+    MethodNode(const std::string& name, uint16_t flags, std::vector<std::string> params, Node* body, ClassNode* klass)
+        : Node(NodeType::METHOD), name(name), flags(flags), params(std::move(params)), body(std::move(body)), klass(klass) {
+    }
+
+    std::string getName() const { return name; }
+    uint16_t getFlags() const { return flags; }
+    std::vector<std::string> getParams() const { return params; }
+    Node* getBody() const { return body; }
+    ClassNode* getClass() const { return klass; }
+
+    virtual std::string toString() override;
+
+private:
+    std::string name;
+    uint16_t flags;
+    std::vector<std::string> params;
+    Node* body;
+    ClassNode* klass;
+};
+
 class CallNode : public Node {
 public:
-    CallNode(const std::string& callee, std::vector<Node*> args, FunctionNode* func = nullptr)
+    CallNode(Node* callee, std::vector<Node*> args, FunctionNode* func = nullptr)
         : Node(NodeType::CALL), callee(callee), args(std::move(args)), func(func) {
     }
 
-    std::string getCallee() const { return callee; }
+    Node* getCallee() const { return callee; }
     std::vector<Node*> getArgs() const { return args; }
 
     FunctionNode* getFunction() const { return func; }
@@ -221,7 +261,7 @@ public:
     virtual std::string toString() override;
 
 private:
-    std::string callee;
+    Node* callee;
     std::vector<Node*> args;
     FunctionNode* func;
 };
@@ -306,17 +346,25 @@ private:
 
 class ClassNode : public Node {
 public:
-    ClassNode(std::string name, std::unordered_map<std::string, Node*> internals)
-        : Node(NodeType::CLASS), name(name), internals(std::move(internals)) { }
+    ClassNode(std::string name)
+        : Node(NodeType::CLASS), name(name), methods(), attributes() { }
 
     std::string getName() const { return name; }
-    std::unordered_map<std::string, Node*> getInternals() const { return internals; }
+    std::unordered_map<std::string, MethodNode*> getMethods() const { return methods; }
+    std::unordered_map<std::string, VariableDeclarationNode*> getAttributes() const { return attributes; }
 
     virtual std::string toString() override;
 
+    void addAttribute(std::string name, VariableDeclarationNode* attribute);
+    void addMethod(std::string name, MethodNode* method);
+
+    VariableDeclarationNode* getAttribute(const std::string& name);
+    MethodNode* getMethod(CallNode* callee);
+
 private:
     std::string name;
-    std::unordered_map<std::string, Node*> internals;
+    std::unordered_map<std::string, MethodNode*> methods;
+    std::unordered_map<std::string, VariableDeclarationNode*> attributes;
 };
 
 std::ostream& operator <<(std::ostream& os, Node* const& node);

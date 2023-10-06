@@ -214,11 +214,50 @@ std::string ForNode::toString() {
 std::string ClassNode::toString() {
     std::stringstream os;
     os << "ClassNode(name: " << getName() << '\n';
-    for (auto const& [_, in] : getInternals()) {
-        os << in << '\n';
+    for (auto const& [_, method] : getMethods()) {
+        os << method << '\n';
+    }
+    for (auto const& [_, attribute] : getAttributes()) {
+        os << attribute << '\n';
     }
     os << ')';
     return os.str();
+}
+
+void ClassNode::addAttribute(std::string name, VariableDeclarationNode* attribute) {
+    if (methods.contains(name)) {
+        throw ParserError("There already exists a method named '" + name + "' in this class.");
+    } else if (attributes.contains(name)) {
+        throw ParserError("There already exists a attribute named '" + name + "' in this class.");
+    }
+    attributes.emplace(name, attribute);
+}
+
+void ClassNode::addMethod(std::string name, MethodNode* method) {
+    if (attributes.contains(name)) {
+        throw ParserError("There already exists a attribute named '" + name + "' in this class.");
+    } else if (methods.contains(name)) {
+        throw ParserError("There already exists a method named '" + name + "' in this class.");
+    }
+    methods.emplace(name, method);
+}
+
+VariableDeclarationNode* ClassNode::getAttribute(const std::string& name) {
+    auto it = attributes.find(name);
+    if (it != attributes.end()) {
+        return it->second;
+    }
+
+    return nullptr;
+}
+
+MethodNode* ClassNode::getMethod(CallNode* callee) {
+    auto it = methods.find(callee->getCallee());
+    if (it != methods.end()) {
+        return it->second;
+    }
+
+    return nullptr;
 }
 
 void ScopeNode::addStatement(Node* node) {
@@ -229,7 +268,7 @@ void ScopeNode::addVariable(std::string name, VariableDeclarationNode* var) {
     if (functions.contains(name)) {
         throw ParserError("There already exists a function named '" + name + "' in this scope.");
     }
-    variables.emplace(name, var); // allows shadowing; be careful with multiple passes!
+    variables.emplace(name, var); // allows shadowing; varibales must be resolved instantly!
 }
 
 void ScopeNode::addFunction(std::string name, FunctionNode* func) {
@@ -255,10 +294,8 @@ VariableDeclarationNode* ScopeNode::getVariable(const std::string& name) {
 }
 
 FunctionNode* ScopeNode::getFunction(CallNode* callee) { // functions should be accessible even if declared after the call -> cache unresolved calls
-    auto it = functions.find(callee->getCallee());
+    auto it = functions.find(callee->getCallee()->);
     if (it != functions.end()) {
-
-
         return it->second;
     }
 
@@ -276,4 +313,24 @@ void Node::setResultType(ValueType resultType) {
 std::ostream& operator <<(std::ostream& os, Node* const& node) {
     os << node->toString() << " -> " << node->getResultType().toString();
     return os;
+}
+
+std::string MethodNode::toString() {
+    std::stringstream os;
+    os << "MethodNode(" << klass->getName() << (FLAG_IN_FLAGS(SymbolFlag::SF_STATIC, getFlags()) ? "::" : ".") << getName() << ' ';
+    if (getFlags() != 0) {
+        os << "flags: " << symbolFlagsToString(getFlags()) << '\n';
+    }
+    os << " ( ";
+    for (auto const& param : getParams()) {
+        os << param << ' ';
+    };
+    os << ") " << getBody() << ")";
+    return os.str();
+}
+
+std::string IdentifierNode::toString() {
+    std::stringstream os;
+    os << "IdentifierNode(" << getName() << ')';
+    return os.str();
 }
