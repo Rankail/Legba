@@ -6,7 +6,7 @@
 #include "Error.h"
 
 Parser::Parser()
-    : hadError(false), current(0), tokens(), unresolvedCalls(), rootScope(nullptr), curScope(nullptr) {
+    : hadError(false), current(0), tokens(), unresolvedFunctionCalls(), rootScope(nullptr), curScope(nullptr) {
 }
 
 bool Parser::parse(const std::vector<Token> &tokens) {
@@ -23,7 +23,7 @@ bool Parser::parse(const std::vector<Token> &tokens) {
         }
     }
 
-    for (auto [scope, callee] : unresolvedCalls) {
+    for (auto [scope, callee] : unresolvedFunctionCalls) {
         auto func = scope->getFunction(callee);
         if (func == nullptr) {
             std::cout << "Error: No function named '" << callee->getCallee() << "'." << std::endl;
@@ -248,6 +248,10 @@ Node* Parser::unary() {
 Node* Parser::call() {
     auto expr = primary();
 
+    if (match(TokenType::LEFT_PAREN) && expr->getType() == NodeType::IDENTIFIER) {
+        expr = finishFunctionCall(expr);
+    }
+
     for (;;) {
         if (match(TokenType::LEFT_PAREN)) {
             expr = finishCall(expr);
@@ -276,7 +280,7 @@ Node* Parser::finishCall(Node* callee) {
 
     consume(TokenType::RIGHT_PAREN, "Expected ')' after arguments.");
 
-    CallNode* call = new CallNode(callee, args);
+    FunctionCallNode* call = new FunctionCallNode(, args);
 
     unresolvedCalls.emplace_back(std::make_pair(curScope, call));
 

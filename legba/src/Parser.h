@@ -5,7 +5,12 @@
 #include <functional>
 
 #include "Token.h"
-#include "ASTNode.h"
+#include "ASTNode/Node.h"
+#include "ASTNode/Class.h"
+#include "ASTNode/Control.h"
+#include "ASTNode/Expression.h"
+#include "ASTNode/Literal.h"
+#include "ASTNode/Symbol.h"
 
 class Parser {
 public:
@@ -70,7 +75,7 @@ private:
     bool hadError;
     ScopeNode* rootScope;
     ScopeNode* curScope;
-    std::vector<std::pair<ScopeNode*, CallNode*>> unresolvedCalls;
+    std::vector<std::pair<ScopeNode*, FunctionCallNode*>> unresolvedFunctionCalls;
 };
 
 
